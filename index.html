@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Frikik Ustası — Multiplayer</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#000;overflow:hidden;font-family:'Georgia',serif;touch-action:none;color:#fff;}
+#canvas{display:block;width:100vw;height:100vh;}
+
+/* ── LOBBY ── */
+#lobby{
+  position:fixed;inset:0;z-index:200;
+  background:radial-gradient(ellipse at 50% 30%, #0a2a0f 0%, #000 70%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;
+}
+#lobby h1{font-size:clamp(28px,7vw,58px);color:#ffd700;letter-spacing:6px;text-shadow:0 0 40px rgba(255,200,0,.6);}
+#lobby p{color:rgba(255,255,255,.55);font-size:14px;letter-spacing:1px;}
+#lobby-status{
+  font-size:16px;color:#fff;background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.15);border-radius:12px;
+  padding:14px 28px;letter-spacing:2px;text-align:center;min-width:260px;
+}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.2);
+  border-top-color:#ffd700;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:8px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.role-badge{
+  padding:10px 30px;border-radius:20px;font-size:14px;font-weight:bold;letter-spacing:3px;
+  background:linear-gradient(135deg,rgba(255,150,0,.2),rgba(255,50,0,.2));
+  border:1px solid rgba(255,150,0,.4);
+}
+
+/* ── HUD ── */
+#hud{
+  position:fixed;top:12px;left:50%;transform:translateX(-50%);
+  display:flex;gap:16px;align-items:center;
+  background:rgba(0,0,0,.65);border:1px solid rgba(255,200,0,.3);
+  border-radius:30px;padding:7px 22px;backdrop-filter:blur(12px);z-index:10;
+}
+.hud-item{color:#fff;font-size:12px;text-align:center;}
+.hud-item span{display:block;color:#ffd700;font-size:17px;font-weight:bold;}
+#round-info{
+  position:fixed;top:12px;right:12px;
+  background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.15);
+  border-radius:10px;padding:6px 14px;font-size:12px;color:#ccc;z-index:10;
+}
+#role-indicator{
+  position:fixed;top:60px;left:50%;transform:translateX(-50%);
+  font-size:13px;letter-spacing:2px;z-index:10;
+  background:rgba(0,0,0,.5);padding:5px 16px;border-radius:20px;
+}
+#cam-indicator{
+  position:fixed;top:12px;left:12px;
+  color:rgba(255,255,255,.45);font-size:11px;
+  background:rgba(0,0,0,.4);padding:5px 10px;border-radius:8px;z-index:10;
+}
+#replay-badge{
+  background:rgba(220,0,40,.85);color:#fff;font-size:13px;font-weight:bold;
+  letter-spacing:3px;padding:6px 16px;border-radius:4px;
+  position:fixed;top:55px;right:12px;z-index:100;display:none;
+}
+#message{
+  position:fixed;top:42%;left:50%;transform:translate(-50%,-50%);
+  font-size:clamp(34px,9vw,78px);font-weight:bold;color:#ffd700;
+  text-shadow:0 0 40px rgba(255,200,0,.9),0 0 80px rgba(255,80,0,.4);
+  pointer-events:none;opacity:0;transition:opacity .35s;
+  text-align:center;z-index:100;letter-spacing:5px;
+}
+
+/* ── SHOOTER CONTROLS ── */
+#shooter-ui{
+  position:fixed;bottom:0;left:0;right:0;
+  padding:10px 14px 18px;
+  background:linear-gradient(transparent,rgba(0,0,0,.9));
+  z-index:10;transition:opacity .4s;
+}
+.ctrl-row{display:flex;gap:10px;margin-bottom:9px;align-items:center;}
+.ctrl-lbl{color:rgba(255,255,255,.65);font-size:11px;width:68px;flex-shrink:0;}
+.sl-wrap{flex:1;position:relative;}
+input[type=range]{-webkit-appearance:none;width:100%;height:6px;background:rgba(255,255,255,.14);border-radius:3px;outline:none;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;background:radial-gradient(circle,#ffd700,#ff8c00);border-radius:50%;cursor:pointer;box-shadow:0 0 10px rgba(255,200,0,.6);}
+.sl-val{position:absolute;right:-33px;top:50%;transform:translateY(-50%);color:#ffd700;font-size:11px;width:28px;text-align:right;}
+#aim-pad{
+  width:100%;height:86px;background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.14);border-radius:12px;
+  position:relative;overflow:hidden;margin-bottom:9px;touch-action:none;
+}
+#aim-canvas{position:absolute;top:0;left:0;width:100%;height:100%;}
+#aim-dot{
+  width:21px;height:21px;background:radial-gradient(circle,#fff 20%,#ffd700 60%,transparent 100%);
+  border-radius:50%;position:absolute;transform:translate(-50%,-50%);
+  pointer-events:none;box-shadow:0 0 18px rgba(255,215,0,.9),0 0 6px #fff;
+  z-index:2;left:50%;top:50%;
+}
+#aim-label{color:rgba(255,255,255,.22);font-size:11px;position:absolute;bottom:4px;right:8px;pointer-events:none;z-index:3;}
+#shoot-btn{
+  width:100%;height:52px;background:linear-gradient(135deg,#ff6b00,#ff0040);
+  border:none;border-radius:13px;color:#fff;font-size:17px;font-weight:bold;
+  letter-spacing:3px;cursor:pointer;box-shadow:0 4px 24px rgba(255,60,0,.5);
+  touch-action:manipulation;transition:transform .1s;
+}
+#shoot-btn:active{transform:scale(.97);}
+#shoot-btn:disabled{opacity:.42;}
+
+/* ── KEEPER CONTROLS ── */
+#keeper-ui{
+  position:fixed;bottom:0;left:0;right:0;
+  padding:10px 14px 18px;
+  background:linear-gradient(transparent,rgba(0,0,0,.9));
+  z-index:10;display:none;
+}
+#keeper-aim-pad{
+  width:100%;height:100px;background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,150,0,.25);border-radius:12px;
+  position:relative;overflow:hidden;margin-bottom:10px;touch-action:none;
+}
+#keeper-canvas{position:absolute;top:0;left:0;width:100%;height:100%;}
+#keeper-dot{
+  width:28px;height:28px;background:radial-gradient(circle,#ff9933 20%,#ff4400 60%,transparent 100%);
+  border-radius:50%;position:absolute;transform:translate(-50%,-50%);
+  pointer-events:none;box-shadow:0 0 20px rgba(255,100,0,.9);
+  z-index:2;left:50%;top:50%;
+}
+#keeper-label{color:rgba(255,255,255,.22);font-size:11px;position:absolute;bottom:4px;right:8px;pointer-events:none;z-index:3;}
+#dive-btn{
+  width:100%;height:52px;background:linear-gradient(135deg,#0066ff,#00ccff);
+  border:none;border-radius:13px;color:#fff;font-size:17px;font-weight:bold;
+  letter-spacing:3px;cursor:pointer;box-shadow:0 4px 24px rgba(0,100,255,.5);
+  touch-action:manipulation;transition:transform .1s;
+}
+#dive-btn:active{transform:scale(.97);}
+#dive-btn:disabled{opacity:.42;}
+#keeper-waiting{
+  text-align:center;color:rgba(255,255,255,.5);font-size:13px;letter-spacing:1px;
+  padding:20px 0;display:none;
+}
+
+/* ── WAIT OVERLAY ── */
+#wait-overlay{
+  position:fixed;bottom:0;left:0;right:0;
+  padding:18px 14px 22px;
+  background:linear-gradient(transparent,rgba(0,0,0,.88));
+  z-index:10;text-align:center;display:none;
+}
+#wait-overlay p{color:rgba(255,255,255,.55);font-size:13px;letter-spacing:1px;}
+
+/* ── ROUND OVER ── */
+#round-over{
+  position:fixed;inset:0;z-index:150;
+  background:rgba(0,0,0,.7);backdrop-filter:blur(6px);
+  display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+}
+#round-over h2{font-size:clamp(24px,6vw,48px);color:#ffd700;letter-spacing:4px;}
+#round-over p{color:rgba(255,255,255,.7);font-size:14px;letter-spacing:1px;}
+#game-over-screen{
+  position:fixed;inset:0;z-index:160;
+  background:radial-gradient(ellipse at 50% 40%,#0a1a30 0%,#000 70%);
+  display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+}
+#game-over-screen h2{font-size:clamp(28px,8vw,64px);color:#ffd700;letter-spacing:6px;}
+#game-over-screen p{color:rgba(255,255,255,.6);font-size:15px;}
+#play-again-btn{
+  padding:14px 40px;background:linear-gradient(135deg,#ff6b00,#ff0040);
+  border:none;border-radius:12px;color:#fff;font-size:16px;font-weight:bold;
+  letter-spacing:2px;cursor:pointer;margin-top:10px;
+}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<!-- LOBBY -->
+<div id="lobby">
+  <h1>⚽ FRİKİK</h1>
+  <p>MULTIPLAYER — 5 RAUNT</p>
+  <div id="lobby-status"><span class="spinner"></span>Sunucuya bağlanıyor...</div>
+  <div class="role-badge" id="role-badge" style="display:none"></div>
+</div>
+
+<!-- HUD -->
+<div id="hud" style="display:none">
+  <div class="hud-item">BEN<span id="my-score">0</span></div>
+  <div class="hud-item" style="opacity:.3">|</div>
+  <div class="hud-item">RAKİP<span id="opp-score">0</span></div>
+</div>
+<div id="round-info" style="display:none">RAUNT <span id="round-num">1</span>/5</div>
+<div id="role-indicator" style="display:none"></div>
+<div id="cam-indicator">📷 KAMERA</div>
+<div id="replay-badge">⏪ TEKRAR</div>
+<div id="message"></div>
+
+<!-- SHOOTER UI -->
+<div id="shooter-ui" style="display:none">
+  <div id="aim-pad">
+    <canvas id="aim-canvas"></canvas>
+    <div id="aim-dot"></div>
+    <div id="aim-label">Kaleyi Hedefle</div>
+  </div>
+  <div class="ctrl-row">
+    <div class="ctrl-lbl">🎯 Pozisyon</div>
+    <div class="sl-wrap">
+      <input type="range" id="sl-pos" min="-1" max="1" step=".05" value="0">
+      <span class="sl-val" id="sv-pos">MRK</span>
+    </div>
+  </div>
+  <div class="ctrl-row">
+    <div class="ctrl-lbl">⚡ Güç</div>
+    <div class="sl-wrap">
+      <input type="range" id="sl-pow" min="20" max="100" step="1" value="70">
+      <span class="sl-val" id="sv-pow">70</span>
+    </div>
+  </div>
+  <div class="ctrl-row">
+    <div class="ctrl-lbl">🌀 Effect</div>
+    <div class="sl-wrap">
+      <input type="range" id="sl-curl" min="-10" max="10" step=".5" value="0">
+      <span class="sl-val" id="sv-curl">0</span>
+    </div>
+  </div>
+  <button id="shoot-btn">ŞUT ÇEK</button>
+</div>
+
+<!-- KEEPER UI -->
+<div id="keeper-ui">
+  <div id="keeper-aim-pad">
+    <canvas id="keeper-canvas"></canvas>
+    <div id="keeper-dot"></div>
+    <div id="keeper-label">Dalış Yönünü Seç</div>
+  </div>
+  <div id="keeper-waiting">⏳ Rakip şut hazırlıyor...</div>
+  <button id="dive-btn">ATLA!</button>
+</div>
+
+<!-- WAIT OVERLAY -->
+<div id="wait-overlay">
+  <p><span class="spinner"></span>Rakip hazırlanıyor...</p>
+</div>
+
+<!-- ROUND OVER -->
+<div id="round-over">
+  <h2 id="round-over-title"></h2>
+  <p id="round-over-sub"></p>
+</div>
+
+<!-- GAME OVER -->
+<div id="game-over-screen">
+  <h2 id="game-over-title"></h2>
+  <p id="game-over-sub"></p>
+  <button id="play-again-btn">TEKRAR OYNA</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════
+// REDIS CONFIG (Upstash REST)
+// ═══════════════════════════════════════════════════
+var REDIS_URL   = 'https://good-termite-44559.upstash.io';
+var REDIS_TOKEN = 'Aa4PAAIncDEzMjcxNzA1OWM5NDQ0ZmY2ODc4MjVmOTg5NTg4ZmY4NXAxNDQ1NTk';
+
+async function redisCmd(cmd) {
+  var res = await fetch(REDIS_URL + '/' + cmd.map(encodeURIComponent).join('/'), {
+    headers: { Authorization: 'Bearer ' + REDIS_TOKEN }
+  });
+  var j = await res.json();
+  return j.result;
+}
+async function rSet(key, val, exSecs) {
+  if (exSecs) return redisCmd(['SET', key, JSON.stringify(val), 'EX', String(exSecs)]);
+  return redisCmd(['SET', key, JSON.stringify(val)]);
+}
+async function rGet(key) {
+  var r = await redisCmd(['GET', key]);
+  if (r === null || r === undefined) return null;
+  try { return JSON.parse(r); } catch(e) { return r; }
+}
+async function rDel(key) { return redisCmd(['DEL', key]); }
+async function rKeys(pattern) { return redisCmd(['KEYS', pattern]); }
+
+// ═══════════════════════════════════════════════════
+// THREE.JS SCENE
+// ═══════════════════════════════════════════════════
+var canvas = document.getElementById('canvas');
+var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.35;
+renderer.physicallyCorrectLights = true;
+
+var scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x030d05, 45, 130);
+
+var camera = new THREE.PerspectiveCamera(58, window.innerWidth/window.innerHeight, 0.05, 300);
+camera.position.set(0, 2.6, 14);
+camera.lookAt(0, 1.2, 0);
+
+window.addEventListener('resize', function() {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  drawGoalPreview(); drawKeeperPad();
+});
+
+// ── LIGHTING ──
+scene.add(new THREE.AmbientLight(0x08120a, 0.6));
+scene.add(new THREE.HemisphereLight(0x1a3a5c, 0x0d1a08, 1.1));
+
+var sun = new THREE.DirectionalLight(0xfff0c8, 2.6);
+sun.position.set(18,35,12); sun.castShadow = true;
+sun.shadow.mapSize.set(4096,4096);
+sun.shadow.camera.near=1; sun.shadow.camera.far=120;
+sun.shadow.camera.left=-30; sun.shadow.camera.right=30;
+sun.shadow.camera.top=30; sun.shadow.camera.bottom=-30;
+sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.05;
+scene.add(sun);
+var fillLight2=new THREE.DirectionalLight(0x3a6fcc,0.65);fillLight2.position.set(-25,20,-5);scene.add(fillLight2);
+
+var floodDefs=[[-18,32,20],[18,32,20],[-18,32,-26],[18,32,-26]];
+floodDefs.forEach(function(p,idx){
+  var spot=new THREE.SpotLight(0xfff8e8,4.5,95,Math.PI/6,0.35,1.5);
+  spot.position.set(p[0],p[1],p[2]); spot.target.position.set(0,0,-5);
+  if(idx<2){spot.castShadow=true;spot.shadow.mapSize.set(1024,1024);spot.shadow.bias=-0.002;}
+  scene.add(spot); scene.add(spot.target);
+  var cone=new THREE.Mesh(new THREE.CylinderGeometry(0.08,3,p[1],8,1,true),
+    new THREE.MeshBasicMaterial({color:0xfff8e0,transparent:true,opacity:0.035,side:THREE.DoubleSide}));
+  cone.position.set(p[0],p[1]/2,p[2]); scene.add(cone);
+  var pole=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.2,p[1],8),
+    new THREE.MeshStandardMaterial({color:0x777777,metalness:0.8,roughness:0.3}));
+  pole.position.set(p[0],p[1]/2,p[2]); pole.castShadow=true; scene.add(pole);
+  var lamp=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.22,0.4),
+    new THREE.MeshStandardMaterial({color:0x888888,metalness:0.9,roughness:0.2}));
+  lamp.position.set(p[0],p[1],p[2]); scene.add(lamp);
+});
+var goalGlow=new THREE.PointLight(0xff9933,2.2,14,2);goalGlow.position.set(0,1.5,-14.5);scene.add(goalGlow);
+
+// ── GRASS ──
+(function(){
+  var geo=new THREE.PlaneGeometry(80,80,80,80);
+  var v=geo.attributes.position.array;
+  for(var i=0;i<v.length;i+=3) v[i+1]+=(Math.random()-.5)*.035;
+  geo.computeVertexNormals();
+  var tc=document.createElement('canvas'); tc.width=tc.height=1024;
+  var tx=tc.getContext('2d');
+  for(var s=0;s<1024;s+=32){tx.fillStyle=s%64===0?'#164a0e':'#1b5c12';tx.fillRect(0,s,1024,32);}
+  for(var n=0;n<10000;n++){
+    tx.fillStyle='rgba('+(18+Math.random()*14|0)+','+(75+Math.random()*35|0)+','+(12+Math.random()*10|0)+',0.15)';
+    tx.fillRect(Math.random()*1024,Math.random()*1024,2,3);
+  }
+  var tex=new THREE.CanvasTexture(tc); tex.wrapS=tex.wrapT=THREE.RepeatWrapping; tex.repeat.set(10,10);
+  var mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({map:tex,roughness:0.94}));
+  mesh.rotation.x=-Math.PI/2; mesh.receiveShadow=true; scene.add(mesh);
+  var lm=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.6});
+  function stripe(x1,z1,x2,z2,w){
+    var len=Math.sqrt((x2-x1)**2+(z2-z1)**2);
+    var m=new THREE.Mesh(new THREE.PlaneGeometry(len,w),lm);
+    m.rotation.x=-Math.PI/2; m.rotation.z=-Math.atan2(z2-z1,x2-x1);
+    m.position.set((x1+x2)/2,.012,(z1+z2)/2); m.receiveShadow=true; scene.add(m);
+  }
+  stripe(-11,-5,11,-5,.1); stripe(-11,-5,-11,5,.1); stripe(11,-5,11,5,.1);
+  stripe(-5.5,-1.8,5.5,-1.8,.08); stripe(-5.5,-1.8,-5.5,1.8,.08); stripe(5.5,-1.8,5.5,1.8,.08);
+  var sp=new THREE.Mesh(new THREE.CircleGeometry(.15,24),lm);
+  sp.rotation.x=-Math.PI/2; sp.position.y=.013; scene.add(sp);
+  var arcPts=[];
+  for(var a=-Math.PI*.6;a<=Math.PI*.6;a+=.04) arcPts.push(new THREE.Vector3(Math.cos(a)*9.15,.015,Math.sin(a)*9.15));
+  scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(arcPts),
+    new THREE.LineBasicMaterial({color:0xffffff,opacity:.6,transparent:true})));
+})();
+
+// ── SKY ──
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(200,32,16),new THREE.ShaderMaterial({
+  side:THREE.BackSide,
+  vertexShader:'varying vec3 vP;void main(){vP=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+  fragmentShader:'varying vec3 vP;void main(){float h=normalize(vP).y;vec3 c=mix(vec3(.32,.15,.05),vec3(.07,.13,.28),smoothstep(-.05,.25,h));c=mix(c,vec3(.01,.03,.08),smoothstep(.2,.75,h));gl_FragColor=vec4(c,1.);}'
+})));
+var sPos=new Float32Array(500*3);
+for(var si=0;si<500;si++){var st=Math.random()*Math.PI*2,sp2=Math.acos(Math.random()*.7+.15);sPos[si*3]=190*Math.sin(sp2)*Math.cos(st);sPos[si*3+1]=190*Math.cos(sp2);sPos[si*3+2]=190*Math.sin(sp2)*Math.sin(st);}
+var starG=new THREE.BufferGeometry(); starG.setAttribute('position',new THREE.BufferAttribute(sPos,3));
+scene.add(new THREE.Points(starG,new THREE.PointsMaterial({color:0xffffff,size:.55})));
+
+// ── GOAL ──
+var GOAL_W=7.32,GOAL_H=2.44,GOAL_Z=-12;
+var pMat=new THREE.MeshStandardMaterial({color:0xfafafa,metalness:.55,roughness:.25});
+function goalCyl(r,h,px,py,pz,rz){
+  var m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,16),pMat);
+  m.position.set(px,py,pz); if(rz)m.rotation.z=rz; m.castShadow=true; m.receiveShadow=true; scene.add(m);
+}
+goalCyl(.055,GOAL_H,-GOAL_W/2,GOAL_H/2,GOAL_Z); goalCyl(.055,GOAL_H,GOAL_W/2,GOAL_H/2,GOAL_Z);
+goalCyl(.055,GOAL_W,0,GOAL_H,GOAL_Z,Math.PI/2);
+[-GOAL_W/2-.35,GOAL_W/2+.35].forEach(function(x){
+  goalCyl(.04,GOAL_H,x,GOAL_H/2,GOAL_Z-2);
+  var gb=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,2.1,8),pMat);
+  gb.rotation.x=Math.PI/2; gb.position.set(x,.04,GOAL_Z-1); gb.castShadow=true; scene.add(gb);
+});
+goalCyl(.04,GOAL_W+.7,0,GOAL_H,GOAL_Z-2,Math.PI/2);
+var netMat=new THREE.MeshBasicMaterial({color:0xddeecc,wireframe:true,opacity:.2,transparent:true});
+function addNet(x,y,z,w,h,rx,ry){
+  var n=new THREE.Mesh(new THREE.PlaneGeometry(w,h,Math.ceil(w*4),Math.ceil(h*4)),netMat);
+  n.position.set(x,y,z); if(rx)n.rotation.x=rx; if(ry)n.rotation.y=ry; scene.add(n);
+}
+addNet(0,GOAL_H/2,GOAL_Z-1.05,GOAL_W,GOAL_H,0,0);
+addNet(0,GOAL_H+.02,GOAL_Z-1.05,GOAL_W,2.1,Math.PI/2,0);
+addNet(-GOAL_W/2-.175,GOAL_H/2,GOAL_Z-1.05,2.1,GOAL_H,0,Math.PI/2);
+addNet(GOAL_W/2+.175,GOAL_H/2,GOAL_Z-1.05,2.1,GOAL_H,0,Math.PI/2);
+
+// ── BALL ──
+var BALL_R=.22,ball;
+(function(){
+  var bc=document.createElement('canvas'); bc.width=bc.height=512;
+  var bx=bc.getContext('2d');
+  bx.fillStyle='#f8f8f8'; bx.fillRect(0,0,512,512);
+  bx.fillStyle='#111';
+  [[256,90],[100,155],[412,155],[58,295],[454,295],[140,415],[372,415],[256,360]].forEach(function(c){
+    bx.beginPath();
+    for(var i=0;i<5;i++){var a=i*Math.PI*2/5-Math.PI/2;(i===0?bx.moveTo:bx.lineTo).call(bx,c[0]+46*Math.cos(a),c[1]+46*Math.sin(a));}
+    bx.closePath(); bx.fill();
+  });
+  bx.strokeStyle='#ccc'; bx.lineWidth=3;
+  bx.beginPath(); bx.ellipse(256,256,230,230,0,0,Math.PI*2); bx.stroke();
+  var tex=new THREE.CanvasTexture(bc);
+  ball=new THREE.Mesh(new THREE.SphereGeometry(BALL_R,32,32),
+    new THREE.MeshStandardMaterial({map:tex,roughness:.38,metalness:.05}));
+  ball.castShadow=true; ball.receiveShadow=true; ball.position.set(0,BALL_R,0); scene.add(ball);
+})();
+
+var shadowDecal=new THREE.Mesh(new THREE.CircleGeometry(.32,20),
+  new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.5,depthWrite:false}));
+shadowDecal.rotation.x=-Math.PI/2; shadowDecal.position.y=.011; scene.add(shadowDecal);
+
+// ── KEEPER ──
+var keeper={group:null,armL:null,armR:null,baseX:0,t:0,diving:false,diveDir:0,diveT:0,willSave:false,diveAimX:0,diveAimY:0};
+(function(){
+  var g=new THREE.Group();
+  var skin=new THREE.MeshStandardMaterial({color:0xfdc68a,roughness:.85});
+  var shirt=new THREE.MeshStandardMaterial({color:0xff4400,roughness:.7,metalness:.05});
+  var pants=new THREE.MeshStandardMaterial({color:0x151555,roughness:.75});
+  var shoe=new THREE.MeshStandardMaterial({color:0x080808,roughness:.9});
+  var glove=new THREE.MeshStandardMaterial({color:0x00bb44,roughness:.5,metalness:.1});
+  var hair=new THREE.MeshStandardMaterial({color:0x180800,roughness:1.0});
+  function B(w,h,d,mat,px,py,pz){var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.castShadow=true;m.receiveShadow=true;m.position.set(px,py,pz);g.add(m);return m;}
+  function C(r,h,mat,px,py,pz,rz){var m=new THREE.Mesh(new THREE.CylinderGeometry(r,r*.9,h,12),mat);m.castShadow=true;m.position.set(px,py,pz);if(rz)m.rotation.z=rz;g.add(m);return m;}
+  B(.17,.1,.32,shoe,-.14,.18,.06); B(.17,.1,.32,shoe,.14,.18,.06);
+  C(.09,.55,pants,-.14,.47,0); C(.09,.55,pants,.14,.47,0);
+  B(.64,.28,.34,pants,0,.78,0); B(.58,.72,.32,shirt,0,1.18,0);
+  B(.18,.22,.01,new THREE.MeshStandardMaterial({color:0xffffff,roughness:.8}),0,1.2,.165);
+  C(.1,.18,skin,0,1.63,0);
+  var hd=new THREE.Mesh(new THREE.SphereGeometry(.21,16,16),skin); hd.castShadow=true; hd.position.set(0,1.77,0); g.add(hd);
+  var hr=new THREE.Mesh(new THREE.SphereGeometry(.215,16,10),hair); hr.scale.set(1,.55,1); hr.position.set(0,1.9,0); g.add(hr);
+  [-0.08,0.08].forEach(function(ex){var e=new THREE.Mesh(new THREE.SphereGeometry(.038,8,8),new THREE.MeshStandardMaterial({color:0x111111}));e.position.set(ex,1.77,.195);g.add(e);});
+  keeper.armL=new THREE.Group(); keeper.armR=new THREE.Group();
+  [keeper.armL,keeper.armR].forEach(function(arm,i){
+    var sign=i===0?-1:1;
+    arm.position.set(sign*.38,1.18,0);
+    var ua=new THREE.Mesh(new THREE.CylinderGeometry(.075,.065,.46,10),shirt); ua.castShadow=true; ua.position.set(sign*.17,-.18,0); ua.rotation.z=sign*.36; arm.add(ua);
+    var fa=new THREE.Mesh(new THREE.CylinderGeometry(.065,.055,.4,10),skin); fa.castShadow=true; fa.position.set(sign*.31,-.43,0); fa.rotation.z=sign*.52; arm.add(fa);
+    var gl=new THREE.Mesh(new THREE.BoxGeometry(.19,.23,.13),glove); gl.castShadow=true; gl.position.set(sign*.44,-.62,0); arm.add(gl);
+    g.add(arm);
+  });
+  g.position.set(0,0,-11.5); scene.add(g);
+  keeper.group=g;
+})();
+
+// ── STADIUM ──
+(function(){
+  var cols=[0xcc1100,0xdd9900,0x0033aa,0x009922,0xaa00aa,0x226688];
+  for(var si=0;si<52;si++){
+    var a=(si/52)*Math.PI*2,r=28+Math.random()*5,h=3+Math.random()*5,tiers=Math.floor(h/1.5);
+    for(var t=0;t<tiers;t++){
+      var m=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.4,1.2),new THREE.MeshStandardMaterial({color:cols[si%cols.length],roughness:.85}));
+      m.position.set(Math.cos(a)*r,t*1.4+.8,Math.sin(a)*r); m.rotation.y=-a; m.castShadow=true; scene.add(m);
+    }
+  }
+  var ring=new THREE.Mesh(new THREE.RingGeometry(22,28,72),new THREE.MeshStandardMaterial({color:0x993311,roughness:.9,side:THREE.DoubleSide}));
+  ring.rotation.x=-Math.PI/2; ring.position.y=.008; scene.add(ring);
+})();
+
+// ── BALL TRAIL ──
+var MAX_TRAIL=22,ballTrail=[],trailMeshes=[];
+for(var ti=0;ti<MAX_TRAIL;ti++){
+  var frac=ti/MAX_TRAIL;
+  var tm=new THREE.Mesh(new THREE.SphereGeometry(BALL_R*(1-frac)*.6,7,7),
+    new THREE.MeshBasicMaterial({color:0xffffff,opacity:0,transparent:true,depthWrite:false}));
+  scene.add(tm); trailMeshes.push(tm);
+}
+
+// ── PARTICLES ──
+var particles=[];
+function spawnGoalParticles(){
+  for(var pi=0;pi<110;pi++){
+    var geo=new THREE.SphereGeometry(.04+Math.random()*.1,5,5);
+    var col=[0xffd700,0xff5500,0xffffff,0x00ff88,0xff00ff][pi%5];
+    var mat=new THREE.MeshBasicMaterial({color:col,transparent:true});
+    var m=new THREE.Mesh(geo,mat);
+    m.position.set((Math.random()-.5)*GOAL_W,.5+Math.random()*GOAL_H,GOAL_Z);
+    particles.push({mesh:m,vel:new THREE.Vector3((Math.random()-.5)*10,Math.random()*14+4,(Math.random()-.5)*4),life:1.0,decay:.015+Math.random()*.02});
+    scene.add(m);
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// GAME STATE
+// ═══════════════════════════════════════════════════
+var ballState='idle';
+var ballVel=new THREE.Vector3(), ballAngVel=new THREE.Vector3(), curlForce=new THREE.Vector3();
+var gravity=-10.2, bounceCount=0, postHitCooldown=0;
+var shakeAmt=0, msgTimeout=null;
+var camMode='free', camPos=new THREE.Vector3(0,2.6,14), camTarget=new THREE.Vector3(0,1.2,0);
+var clock=new THREE.Clock();
+
+function screenShake(a){shakeAmt=Math.max(shakeAmt,a);}
+function showMessage(text,dur,col){
+  var el=document.getElementById('message');
+  el.textContent=text; el.style.color=col; el.style.opacity='1';
+  clearTimeout(msgTimeout);
+  msgTimeout=setTimeout(function(){el.style.opacity='0';},dur);
+}
+
+// ═══════════════════════════════════════════════════
+// MULTIPLAYER STATE
+// ═══════════════════════════════════════════════════
+var MY_ID = Math.random().toString(36).slice(2,10);
+var ROOM_KEY = null;
+var myRole = null;     // 'shooter' | 'keeper'
+var myScore = 0, oppScore = 0;
+var currentRound = 1;
+var totalRounds = 5;
+var pollTimer = null;
+var roundPhase = 'waiting'; // waiting | shooting | result | roundover
+var shotFired = false;
+var diveFired = false;
+
+function updateScoreHUD(){
+  document.getElementById('my-score').textContent = myScore;
+  document.getElementById('opp-score').textContent = oppScore;
+  document.getElementById('round-num').textContent = currentRound;
+}
+
+// ═══════════════════════════════════════════════════
+// AIM PAD
+// ═══════════════════════════════════════════════════
+var aimX=0, aimY=0;
+var keeperAimX=0, keeperAimY=0;
+var aimPad=document.getElementById('aim-pad');
+var aimDot=document.getElementById('aim-dot');
+var aimCanvas=document.getElementById('aim-canvas');
+var keeperPad=document.getElementById('keeper-aim-pad');
+var keeperDot=document.getElementById('keeper-dot');
+var keeperCanvas=document.getElementById('keeper-canvas');
+
+function drawGoalPreview(){
+  if(!aimCanvas) return;
+  var pw=aimPad.clientWidth,ph=aimPad.clientHeight;
+  aimCanvas.width=pw; aimCanvas.height=ph;
+  var cx=aimCanvas.getContext('2d');
+  var mx=pw*.08,my=ph*.07,mw=pw*.84,mh=ph*.86;
+  cx.fillStyle='rgba(0,180,80,.06)'; cx.fillRect(mx,my,mw,mh);
+  cx.strokeStyle='rgba(255,255,255,.07)'; cx.lineWidth=.6;
+  for(var gx=1;gx<7;gx++){cx.beginPath();cx.moveTo(mx+mw*gx/7,my);cx.lineTo(mx+mw*gx/7,my+mh);cx.stroke();}
+  for(var gy=1;gy<4;gy++){cx.beginPath();cx.moveTo(mx,my+mh*gy/4);cx.lineTo(mx+mw,my+mh*gy/4);cx.stroke();}
+  cx.strokeStyle='rgba(255,255,255,.55)'; cx.lineWidth=2.5; cx.strokeRect(mx,my,mw,mh);
+  var kxR=keeper.group?(keeper.group.position.x/(GOAL_W/2)):0;
+  var kx=mx+mw*(kxR*.5+.5);
+  cx.fillStyle='rgba(255,80,0,.32)'; cx.fillRect(kx-mw*.11,my+mh*.12,mw*.22,mh*.88);
+  cx.beginPath(); cx.arc(kx,my+mh*.15,mw*.055,0,Math.PI*2); cx.fillStyle='rgba(255,150,80,.5)'; cx.fill();
+}
+function updateAimDot(){
+  var pw=aimPad.clientWidth,ph=aimPad.clientHeight;
+  var mx=pw*.08,my=ph*.07,mw=pw*.84,mh=ph*.86;
+  aimDot.style.left=(mx+(aimX+1)/2*mw)+'px';
+  aimDot.style.top=(my+(-aimY+1)/2*mh)+'px';
+}
+function padEvent(e){
+  var rect=aimPad.getBoundingClientRect();
+  var cx=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;
+  var cy=(e.touches?e.touches[0].clientY:e.clientY)-rect.top;
+  aimX=Math.max(-1,Math.min(1,(cx/rect.width)*2-1));
+  aimY=Math.max(-1,Math.min(1,-((cy/rect.height)*2-1)));
+  updateAimDot(); drawGoalPreview();
+}
+aimPad.addEventListener('touchstart',function(e){e.preventDefault();padEvent(e);},{passive:false});
+aimPad.addEventListener('touchmove',function(e){e.preventDefault();padEvent(e);},{passive:false});
+aimPad.addEventListener('mousedown',padEvent);
+aimPad.addEventListener('mousemove',function(e){if(e.buttons)padEvent(e);});
+
+function drawKeeperPad(){
+  if(!keeperCanvas) return;
+  var pw=keeperPad.clientWidth,ph=keeperPad.clientHeight;
+  keeperCanvas.width=pw; keeperCanvas.height=ph;
+  var cx=keeperCanvas.getContext('2d');
+  var mx=pw*.05,my=ph*.07,mw=pw*.9,mh=ph*.86;
+  cx.fillStyle='rgba(0,80,200,.06)'; cx.fillRect(mx,my,mw,mh);
+  cx.strokeStyle='rgba(255,255,255,.07)'; cx.lineWidth=.6;
+  for(var gx=1;gx<7;gx++){cx.beginPath();cx.moveTo(mx+mw*gx/7,my);cx.lineTo(mx+mw*gx/7,my+mh);cx.stroke();}
+  for(var gy=1;gy<4;gy++){cx.beginPath();cx.moveTo(mx,my+mh*gy/4);cx.lineTo(mx+mw,my+mh*gy/4);cx.stroke();}
+  cx.strokeStyle='rgba(0,150,255,.6)'; cx.lineWidth=2.5; cx.strokeRect(mx,my,mw,mh);
+  // Arrow indicating dive direction
+  var kx=mx+mw*(keeperAimX*.5+.5), ky=my+mh*(keeperAimY*-.5+.5);
+  cx.strokeStyle='rgba(0,200,255,.4)'; cx.lineWidth=1.5;
+  cx.beginPath(); cx.moveTo(mx+mw/2,my+mh/2); cx.lineTo(kx,ky); cx.stroke();
+}
+function updateKeeperDot(){
+  var pw=keeperPad.clientWidth,ph=keeperPad.clientHeight;
+  var mx=pw*.05,my=ph*.07,mw=pw*.9,mh=ph*.86;
+  keeperDot.style.left=(mx+(keeperAimX+1)/2*mw)+'px';
+  keeperDot.style.top=(my+(-keeperAimY+1)/2*mh)+'px';
+}
+function keeperPadEvent(e){
+  var rect=keeperPad.getBoundingClientRect();
+  var cx2=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;
+  var cy2=(e.touches?e.touches[0].clientY:e.clientY)-rect.top;
+  keeperAimX=Math.max(-1,Math.min(1,(cx2/rect.width)*2-1));
+  keeperAimY=Math.max(-1,Math.min(1,-((cy2/rect.height)*2-1)));
+  updateKeeperDot(); drawKeeperPad();
+}
+keeperPad.addEventListener('touchstart',function(e){e.preventDefault();keeperPadEvent(e);},{passive:false});
+keeperPad.addEventListener('touchmove',function(e){e.preventDefault();keeperPadEvent(e);},{passive:false});
+keeperPad.addEventListener('mousedown',keeperPadEvent);
+keeperPad.addEventListener('mousemove',function(e){if(e.buttons)keeperPadEvent(e);});
+
+// Sliders
+var slPos=document.getElementById('sl-pos'),slPow=document.getElementById('sl-pow'),slCurl=document.getElementById('sl-curl');
+slPos.addEventListener('input',function(){
+  var v=parseFloat(slPos.value);
+  document.getElementById('sv-pos').textContent=v<-.4?'SOL':v>.4?'SAĞ':'MRK';
+  ball.position.set(v*5,BALL_R,0); ball.rotation.set(0,0,0);
+  shadowDecal.position.x=ball.position.x; shadowDecal.position.z=0;
+});
+slPow.addEventListener('input',function(){document.getElementById('sv-pow').textContent=slPow.value;});
+slCurl.addEventListener('input',function(){var v=parseFloat(slCurl.value);document.getElementById('sv-curl').textContent=(v>0?'+':'')+v;});
+
+// ═══════════════════════════════════════════════════
+// SHOOT (shooter fires)
+// ═══════════════════════════════════════════════════
+document.getElementById('shoot-btn').addEventListener('click', async function(){
+  if(roundPhase!=='shooting'||shotFired||myRole!=='shooter') return;
+  shotFired=true;
+  document.getElementById('shoot-btn').disabled=true;
+  document.getElementById('wait-overlay').style.display='block';
+
+  var shotData={
+    posX: parseFloat(slPos.value)*5,
+    targetX: aimX*(GOAL_W/2-.1),
+    targetY: Math.max(.05,Math.min(GOAL_H-.08,(aimY>0?aimY*GOAL_H:BALL_R+aimY*.4)+.55)),
+    power: parseFloat(slPow.value),
+    curl: parseFloat(slCurl.value),
+    ts: Date.now()
+  };
+  await rSet(ROOM_KEY+':shot', shotData, 30);
+});
+
+// ═══════════════════════════════════════════════════
+// DIVE (keeper dives)
+// ═══════════════════════════════════════════════════
+document.getElementById('dive-btn').addEventListener('click', async function(){
+  if(roundPhase!=='shooting'||diveFired||myRole!=='keeper') return;
+  diveFired=true;
+  document.getElementById('dive-btn').disabled=true;
+
+  var diveData={
+    aimX: keeperAimX,
+    aimY: keeperAimY,
+    ts: Date.now()
+  };
+  await rSet(ROOM_KEY+':dive', diveData, 30);
+  document.getElementById('keeper-waiting').style.display='block';
+  document.getElementById('dive-btn').style.display='none';
+  document.getElementById('keeper-aim-pad').style.opacity='.4';
+});
+
+// ═══════════════════════════════════════════════════
+// FIRE BALL from shot data
+// ═══════════════════════════════════════════════════
+function fireBall(shotData, diveData){
+  var posX=shotData.posX||0;
+  ball.position.set(posX, BALL_R, 0);
+  ball.rotation.set(0,0,0);
+  shadowDecal.position.x=posX; shadowDecal.position.z=0;
+
+  var targetX=shotData.targetX, targetY=shotData.targetY;
+  var power=shotData.power, curl=shotData.curl;
+  var dir=new THREE.Vector3(targetX,targetY,GOAL_Z).sub(ball.position).normalize();
+  var speed=power*.29;
+  ballVel.copy(dir).multiplyScalar(speed); ballVel.y+=1.8;
+  curlForce.set(curl*.09,0,0);
+  ballAngVel.set(curl*.6,-speed*.25,curl*.15);
+  ballState='flying'; bounceCount=0; ballTrail=[];
+
+  // Set keeper dive from diveData (player-controlled)
+  if(diveData){
+    keeper.diving=true; keeper.diveT=0;
+    keeper.diveDir=diveData.aimX >= 0 ? 1 : -1;
+    keeper.diveAimX=diveData.aimX; keeper.diveAimY=diveData.aimY;
+    // willSave computed after animation
+    keeper.willSave=false; // determined by physics
+  } else {
+    // No dive submitted — keeper stands still
+    keeper.diving=false;
+  }
+
+  camMode='follow';
+  document.getElementById('cam-indicator').textContent='📷 TAKİP';
+}
+
+// ═══════════════════════════════════════════════════
+// KEEPER COLLISION
+// ═══════════════════════════════════════════════════
+function checkKeeperCollision(){
+  var kp=keeper.group.position;
+  var prog=Math.min(1,keeper.diveT), eased=1-Math.pow(1-prog,3);
+  var tests=[
+    {c:new THREE.Vector3(kp.x,kp.y+1.15,kp.z-.05),r:.42},
+    {c:new THREE.Vector3(kp.x,kp.y+1.78,kp.z),r:.28},
+    {c:new THREE.Vector3(kp.x-.13,kp.y+.5,kp.z),r:.18},
+    {c:new THREE.Vector3(kp.x+.13,kp.y+.5,kp.z),r:.18},
+  ];
+  if(keeper.diving&&prog>.05){
+    var go=keeper.diveDir*eased*1.6, gh=kp.y+.4+eased*1.3;
+    tests.push({c:new THREE.Vector3(kp.x+go,gh,kp.z-.1),r:.32});
+    tests.push({c:new THREE.Vector3(kp.x+keeper.diveDir*eased*.9,kp.y+.8+eased*.8,kp.z-.08),r:.22});
+  }
+  for(var i=0;i<tests.length;i++){
+    var d=ball.position.distanceTo(tests[i].c), minD=BALL_R+tests[i].r;
+    if(d<minD){
+      var normal=ball.position.clone().sub(tests[i].c).normalize();
+      ball.position.copy(tests[i].c).addScaledVector(normal,minD+.01);
+      var vDotN=ballVel.dot(normal);
+      if(vDotN<0){ballVel.addScaledVector(normal,-2*vDotN*.55);ballVel.x+=(Math.random()-.5)*1.5;ballVel.y+=1.8+Math.random()*1.2;}
+      return true;
+    }
+  }
+  return false;
+}
+
+function checkPostAndGoal(){
+  var bp=ball.position;
+  if(bp.z>GOAL_Z-.3&&bp.z<GOAL_Z+.3&&postHitCooldown<=0){
+    if(Math.abs(bp.y-GOAL_H)<.13&&Math.abs(bp.x)<GOAL_W/2+.1){
+      ballVel.y*=-.52; ballVel.z*=-.3; screenShake(.6); postHitCooldown=.45; showMessage('🔝 ÜST DİREK!',1600,'#fff'); return;
+    }
+    [[-GOAL_W/2],[GOAL_W/2]].forEach(function(px){
+      if(Math.abs(bp.x-px[0])<.13&&bp.y<GOAL_H+.1&&bp.y>-.1){
+        ballVel.x*=-.62; ballVel.z*=-.28; screenShake(.55); postHitCooldown=.45; showMessage('⚽ DİREK!',1600,'#fff');
+      }
+    });
+  }
+  if(bp.z<GOAL_Z+.08&&bp.z>GOAL_Z-2.6){
+    if(Math.abs(bp.x)<GOAL_W/2&&bp.y>-.05&&bp.y<GOAL_H+.05){
+      var isGoal=true;
+      if(keeper.diving){
+        var kp=keeper.group.position, prog=Math.min(1,keeper.diveT), eas=1-Math.pow(1-prog,3);
+        var gx=kp.x+keeper.diveDir*eas*1.6, gy=kp.y+.4+eas*1.3;
+        if(new THREE.Vector3(bp.x-gx,bp.y-gy,0).length()<.55) isGoal=false;
+      }
+      resolveRound(isGoal?'goal':'save');
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// RESOLVE ROUND
+// ═══════════════════════════════════════════════════
+var roundResolved=false;
+function resolveRound(result){
+  if(roundResolved) return;
+  roundResolved=true;
+  ballState='done';
+
+  if(result==='goal'){
+    // Shooter scores, keeper loses point (swap will happen)
+    if(myRole==='shooter') myScore++; else oppScore++;
+    spawnGoalParticles(); screenShake(2.2);
+    showMessage('⚽  G O L !!!',3000,'#ffd700');
+    camMode='replay-top'; setTimeout(function(){camMode='replay-side';},1600);
+    document.getElementById('replay-badge').style.display='block';
+    setTimeout(function(){document.getElementById('replay-badge').style.display='none';},3000);
+  } else {
+    if(myRole==='keeper') myScore++; else oppScore++;
+    screenShake(1.0); showMessage('🧤 KURTARILAN!',2200,'#ff6600');
+    camMode='replay-side';
+  }
+  updateScoreHUD();
+
+  // Publish result to Redis for both players to see
+  rSet(ROOM_KEY+':result', {outcome:result, round:currentRound, ts:Date.now()}, 30);
+
+  setTimeout(function(){
+    showRoundOver(result);
+  }, 2800);
+}
+
+function showRoundOver(result){
+  var title='';
+  if(result==='goal'){
+    title = myRole==='shooter'? '🎉 GOL ATTUN!' : '😓 GOL YEDİN!';
+  } else {
+    title = myRole==='keeper'? '🧤 KURTARDIN!' : '😓 KURTARILDI!';
+  }
+  document.getElementById('round-over-title').textContent=title;
+  document.getElementById('round-over-sub').textContent='Skor: '+myScore+' — '+oppScore;
+  document.getElementById('round-over').style.display='flex';
+
+  setTimeout(function(){
+    document.getElementById('round-over').style.display='none';
+    if(currentRound>=totalRounds){
+      showGameOver();
+    } else {
+      currentRound++;
+      // Swap roles
+      myRole = myRole==='shooter'?'keeper':'shooter';
+      startRound();
+    }
+  },3200);
+}
+
+function showGameOver(){
+  var title='';
+  if(myScore>oppScore) title='🏆 KAZANDIN!';
+  else if(myScore<oppScore) title='😔 KAYBETTİN';
+  else title='🤝 BERABERE!';
+  document.getElementById('game-over-title').textContent=title;
+  document.getElementById('game-over-sub').textContent='Son skor: '+myScore+' — '+oppScore;
+  document.getElementById('game-over-screen').style.display='flex';
+  clearInterval(pollTimer);
+}
+
+document.getElementById('play-again-btn').addEventListener('click',function(){
+  document.getElementById('game-over-screen').style.display='none';
+  myScore=0; oppScore=0; currentRound=1;
+  rDel(ROOM_KEY+':result'); rDel(ROOM_KEY+':shot'); rDel(ROOM_KEY+':dive');
+  startRound();
+});
+
+// ═══════════════════════════════════════════════════
+// START ROUND
+// ═══════════════════════════════════════════════════
+function startRound(){
+  roundResolved=false; shotFired=false; diveFired=false;
+  ballState='idle'; ballVel.set(0,0,0); curlForce.set(0,0,0);
+  ball.position.set(0,BALL_R,0); ball.rotation.set(0,0,0);
+  trailMeshes.forEach(function(t){t.material.opacity=0;}); ballTrail=[];
+  keeper.diving=false; keeper.diveT=0; keeper.willSave=false;
+  keeper.group.position.set(0,0,-11.5); keeper.group.rotation.set(0,0,0);
+  keeper.armL.rotation.set(0,0,0); keeper.armR.rotation.set(0,0,0); keeper.baseX=0;
+  shadowDecal.position.x=0; shadowDecal.position.z=0; shadowDecal.material.opacity=.48;
+  camMode='free';
+  roundPhase='shooting';
+  updateScoreHUD();
+
+  // UI
+  document.getElementById('hud').style.display='flex';
+  document.getElementById('round-info').style.display='block';
+  document.getElementById('role-indicator').style.display='block';
+  document.getElementById('wait-overlay').style.display='none';
+
+  if(myRole==='shooter'){
+    document.getElementById('role-indicator').textContent='⚽ SEN — ATICI';
+    document.getElementById('role-indicator').style.color='#ffd700';
+    document.getElementById('shooter-ui').style.display='block';
+    document.getElementById('keeper-ui').style.display='none';
+    document.getElementById('shoot-btn').disabled=false;
+    slPos.value=0; document.getElementById('sv-pos').textContent='MRK';
+    slPow.value=70; document.getElementById('sv-pow').textContent='70';
+    slCurl.value=0; document.getElementById('sv-curl').textContent='0';
+    aimX=0; aimY=0; updateAimDot();
+    setTimeout(drawGoalPreview,80);
+  } else {
+    document.getElementById('role-indicator').textContent='🧤 SEN — KALECİ';
+    document.getElementById('role-indicator').style.color='#00ccff';
+    document.getElementById('shooter-ui').style.display='none';
+    document.getElementById('keeper-ui').style.display='block';
+    document.getElementById('dive-btn').disabled=false;
+    document.getElementById('dive-btn').style.display='block';
+    document.getElementById('keeper-waiting').style.display='none';
+    document.getElementById('keeper-aim-pad').style.opacity='1';
+    keeperAimX=0; keeperAimY=0; updateKeeperDot();
+    setTimeout(drawKeeperPad,80);
+  }
+
+  // Clean previous round data
+  rDel(ROOM_KEY+':shot'); rDel(ROOM_KEY+':dive'); rDel(ROOM_KEY+':result');
+
+  // Start polling
+  clearInterval(pollTimer);
+  pollTimer=setInterval(pollRound,600);
+}
+
+// ═══════════════════════════════════════════════════
+// POLL — watch for shot + dive from Redis
+// ═══════════════════════════════════════════════════
+async function pollRound(){
+  if(ballState==='flying'||roundResolved) return;
+
+  var shotData=await rGet(ROOM_KEY+':shot');
+  var diveData=await rGet(ROOM_KEY+':dive');
+  var resultData=await rGet(ROOM_KEY+':result');
+
+  // If result already set by other player, apply it locally
+  if(resultData&&resultData.round===currentRound&&!roundResolved){
+    clearInterval(pollTimer);
+    var res=resultData.outcome;
+    ballState='done'; roundResolved=true;
+    if(res==='goal'){ if(myRole==='shooter')myScore++; else oppScore++; spawnGoalParticles(); screenShake(2.2); showMessage('⚽  G O L !!!',3000,'#ffd700'); camMode='replay-top'; setTimeout(function(){camMode='replay-side';},1600); }
+    else { if(myRole==='keeper')myScore++; else oppScore++; screenShake(1.0); showMessage('🧤 KURTARILAN!',2200,'#ff6600'); camMode='replay-side'; }
+    updateScoreHUD();
+    setTimeout(function(){showRoundOver(res);},2800);
+    return;
+  }
+
+  // If shot is ready, fire the ball (whoever sees it first fires locally)
+  if(shotData&&ballState==='idle'){
+    clearInterval(pollTimer);
+    document.getElementById('wait-overlay').style.display='none';
+    // Wait up to 1.5s for dive input then fire
+    var diveWait=0;
+    var waitForDive=setInterval(async function(){
+      diveWait+=300;
+      var d2=await rGet(ROOM_KEY+':dive');
+      if(d2||diveWait>=1500){
+        clearInterval(waitForDive);
+        fireBall(shotData,d2);
+      }
+    },300);
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// MATCHMAKING
+// ═══════════════════════════════════════════════════
+async function matchmake(){
+  var lobbyStatus=document.getElementById('lobby-status');
+  lobbyStatus.innerHTML='<span class="spinner"></span>Eşleştirme aranıyor...';
+
+  // Check for open room
+  var openRoom=await rGet('lobby:open');
+  if(openRoom&&openRoom.hostId&&openRoom.hostId!==MY_ID){
+    // Join existing room
+    ROOM_KEY='room:'+openRoom.roomId;
+    myRole='keeper'; // second player is keeper first
+    var roomId=openRoom.roomId;
+    await rDel('lobby:open');
+    await rSet(ROOM_KEY+':guest',{id:MY_ID,ts:Date.now()},60);
+
+    lobbyStatus.innerHTML='✅ Eşleşme bulundu! Hazırlanıyor...';
+    document.getElementById('role-badge').style.display='block';
+    document.getElementById('role-badge').textContent='🧤 KALECİ olarak başlıyorsun';
+
+    setTimeout(function(){
+      document.getElementById('lobby').style.display='none';
+      startRound();
+    },1800);
+
+  } else {
+    // Create room, wait for guest
+    var roomId=Math.random().toString(36).slice(2,8).toUpperCase();
+    ROOM_KEY='room:'+roomId;
+    myRole='shooter'; // first player is shooter first
+    await rSet('lobby:open',{roomId:roomId,hostId:MY_ID,ts:Date.now()},60);
+
+    lobbyStatus.innerHTML='<span class="spinner"></span>Oyuncu bekleniyor...<br><small style="font-size:12px;opacity:.5">Oda: '+roomId+'</small>';
+    document.getElementById('role-badge').style.display='block';
+    document.getElementById('role-badge').textContent='⚽ ATICI olarak başlıyorsun';
+
+    // Poll for guest
+    var guestPoll=setInterval(async function(){
+      var guest=await rGet(ROOM_KEY+':guest');
+      if(guest&&guest.id&&guest.id!==MY_ID){
+        clearInterval(guestPoll);
+        lobbyStatus.innerHTML='✅ Rakip bulundu! Hazırlanıyor...';
+        setTimeout(function(){
+          document.getElementById('lobby').style.display='none';
+          startRound();
+        },1800);
+      }
+      // Refresh open lobby
+      var stillOpen=await rGet('lobby:open');
+      if(stillOpen&&stillOpen.roomId===roomId){
+        await rSet('lobby:open',{roomId:roomId,hostId:MY_ID,ts:Date.now()},60);
+      }
+    },1000);
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// RENDER LOOP
+// ═══════════════════════════════════════════════════
+function animate(){
+  requestAnimationFrame(animate);
+  var dt=Math.min(clock.getDelta(),.05);
+  postHitCooldown-=dt;
+
+  // Keeper anim
+  if(!keeper.diving){
+    keeper.t+=dt;
+    keeper.group.position.x=keeper.baseX+Math.sin(keeper.t*1.3)*.9;
+    keeper.group.position.y=0; keeper.group.rotation.set(0,0,0);
+    keeper.armL.rotation.z=Math.sin(keeper.t*1.1)*.35;
+    keeper.armR.rotation.z=-Math.sin(keeper.t*1.1)*.35;
+    keeper.armL.rotation.x=0; keeper.armR.rotation.x=0;
+  } else {
+    keeper.diveT+=dt*2.8;
+    var prog=Math.min(1,keeper.diveT), eased=1-Math.pow(1-prog,3);
+    keeper.group.position.x+=keeper.diveDir*5*dt*(1-prog*.55);
+    keeper.group.position.x=Math.max(-GOAL_W/2+.2,Math.min(GOAL_W/2-.2,keeper.group.position.x));
+    keeper.group.rotation.z=keeper.diveDir*eased*.72;
+    keeper.group.rotation.x=eased*.22;
+    keeper.group.position.y=Math.max(0,Math.sin(eased*Math.PI*.52)*1.35);
+    keeper.armL.rotation.z=-.4+eased*keeper.diveDir*-1.7;
+    keeper.armR.rotation.z=.4+eased*keeper.diveDir*-1.7;
+    keeper.armL.rotation.x=eased*.95; keeper.armR.rotation.x=eased*.95;
+  }
+
+  if(ballState==='flying'){
+    ballVel.y+=gravity*dt; ballVel.x+=curlForce.x*dt;
+    ballVel.multiplyScalar(1-.011*dt*60);
+    ball.position.addScaledVector(ballVel,dt);
+    ball.rotation.x+=ballAngVel.z*dt; ball.rotation.z-=ballAngVel.x*dt; ball.rotation.y+=ballAngVel.y*dt;
+
+    shadowDecal.position.x=ball.position.x; shadowDecal.position.z=ball.position.z;
+    var hr=Math.max(0,1-ball.position.y/7);
+    shadowDecal.material.opacity=.48*hr;
+    var sc=.3+hr*.5; shadowDecal.scale.set(sc/.3,1,sc/.3);
+
+    if(ballTrail.length===0||ball.position.distanceTo(ballTrail[ballTrail.length-1])>.27){
+      ballTrail.push(ball.position.clone());
+      if(ballTrail.length>MAX_TRAIL)ballTrail.shift();
+    }
+    trailMeshes.forEach(function(tm,i){
+      var ti=ballTrail.length-1-i;
+      if(ti>=0){tm.position.copy(ballTrail[ti]);tm.material.opacity=(1-i/MAX_TRAIL)*.26;}
+      else tm.material.opacity=0;
+    });
+
+    if(ball.position.y<BALL_R){
+      ball.position.y=BALL_R;
+      if(Math.abs(ballVel.y)>.6){ballVel.y*=-.42;ballVel.x*=.7;ballVel.z*=.7;bounceCount++;screenShake(.3);}
+      else{ballVel.multiplyScalar(.85);if(ballVel.length()<.08&&!roundResolved)resolveRound('miss');}
+    }
+    if(ball.position.z<-9&&ball.position.z>-14.5) checkKeeperCollision();
+    checkPostAndGoal();
+    if(ball.position.z<-17||ball.position.z>22||Math.abs(ball.position.x)>22||ball.position.y>22){if(!roundResolved)resolveRound('miss');}
+  }
+
+  particles=particles.filter(function(p){
+    p.life-=p.decay; p.vel.y-=16*dt;
+    p.mesh.position.addScaledVector(p.vel,dt);
+    p.mesh.material.opacity=p.life;
+    if(p.life<=0){scene.remove(p.mesh);return false;}return true;
+  });
+
+  // Camera
+  if(camMode==='free'){camPos.lerp(new THREE.Vector3(0,2.6,14),dt*4);camTarget.lerp(new THREE.Vector3(0,1.2,0),dt*4);}
+  else if(camMode==='follow'){camPos.lerp(new THREE.Vector3(ball.position.x*.22,ball.position.y*.4+3.5,ball.position.z+11),dt*3.5);camTarget.lerp(ball.position,dt*6);}
+  else if(camMode==='replay-top'){camPos.lerp(new THREE.Vector3(ball.position.x*.1,15,ball.position.z+7),dt*1.8);camTarget.lerp(new THREE.Vector3(0,.5,GOAL_Z),dt*2);}
+  else if(camMode==='replay-side'){camPos.lerp(new THREE.Vector3(14,5,-4),dt*1.3);camTarget.lerp(new THREE.Vector3(0,1.8,GOAL_Z),dt*1.7);}
+  camera.position.copy(camPos); camera.lookAt(camTarget);
+
+  if(shakeAmt>.005){camera.position.x+=(Math.random()-.5)*shakeAmt;camera.position.y+=(Math.random()-.5)*shakeAmt;shakeAmt*=.82;}else shakeAmt=0;
+
+  renderer.render(scene,camera);
+}
+animate();
+
+// START
+matchmake();
+</script>
+</body>
+</html>
